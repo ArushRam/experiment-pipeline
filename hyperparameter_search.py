@@ -9,7 +9,7 @@ from ray.tune.search.hyperopt import HyperOptSearch
 from ray.tune.search import ConcurrencyLimiter
 import torch
 
-from experiment import experiment
+from experiment import Experiment
 
 def initialize_argparse() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Hyperparameter search.")
@@ -64,14 +64,14 @@ def initialize_argparse() -> argparse.ArgumentParser:
     data_args.add_argument(
         "--data_type", type=str, required=True, help="Type of data to use."
     )
-    data_args.add_argument("--input_size", type=int, required=True, help="Input size.")
     data_args.add_argument(
         "--train_csv", type=str, required=True, help="Path to training CSV."
     )
     data_args.add_argument(
         "--train_fraction",
         type=float,
-        required=True,
+        required=False,
+        default=0.2,
         help="Fraction of training data to use for training.",
     )
     data_args.add_argument(
@@ -101,18 +101,18 @@ def initialize_argparse() -> argparse.ArgumentParser:
 
     resource_args = parser.add_argument_group("resources", "Resource arguments")
     resource_args.add_argument(
-        "--num_cpus", type=int, required=True, help="Number of CPUs to use."
+        "--num_cpus", type=int, required=False, help="Number of CPUs to use", default=1
     )
     resource_args.add_argument(
         "--num_cpus_per_trial",
         type=float,
-        required=True,
+        required=False, default=1,
         help="Number of CPUs to use for each trial.",
     )
     resource_args.add_argument(
         "--num_gpus_per_trial",
         type=float,
-        required=True,
+        required=False, default=0,
         help="Number of GPUs to use for each trial.",
     )
     resource_args.add_argument(
@@ -125,7 +125,7 @@ def initialize_argparse() -> argparse.ArgumentParser:
     resource_args.add_argument(
         "--object_store_memory_bytes",
         type=int,
-        default=10 * 1024 * 1024 * 1024,
+        default=1 * 1024 * 1024 * 1024,
         required=False,
         help="Object store memory for Ray in bytes.",
     )
@@ -143,7 +143,7 @@ def initialize_argparse() -> argparse.ArgumentParser:
     model_args.add_argument(
         "--metrics",
         nargs="*",
-        default=["pearson_r"],
+        default=["pearson-r"],
         required=False,
         help="Metrics to use for evaluation.",
     )
@@ -213,7 +213,7 @@ def get_dataset_parameters(data_type: str) -> dict:
             "sequence_channels": 4,
             "structure_channels": 0,
             "output_size": 1,
-            "output_activations": ["none"],
+            "output_activation": ["sigmoid"],
         }
     else:
         raise ValueError(f"Unknown data type: {data_type}")
@@ -224,10 +224,10 @@ def get_dataset_parameters(data_type: str) -> dict:
 def get_search_space(model_architecture: str) -> dict:
     if model_architecture == "simple_cnn":
         search_space = {
-            "num_filters": hp.loguniform("conv.num_filters", np.log(16), np.log(64), 1),
-            "kernel_size": hp.uniformint("conv.kernel_size", 5, 11),
+            "num_filters": hp.choice("conv.num_filters", [16, 32, 64]),
+            "kernel_size": hp.choice("conv.kernel_size", [5, 7, 9, 11]),
             "activation": "gelu",
-            "output_activation": "none",
+            "output_activation": "sigmoid",
             "batch_size_iter": 1024,  # Don't need gradient accumulation, so just set to highest possible batch size
             "batch_size": hp.qloguniform("batch_size", np.log(128), np.log(1024), 1),
             "init_lr": hp.loguniform(
@@ -239,7 +239,6 @@ def get_search_space(model_architecture: str) -> dict:
             "lr_decay_factor": hp.loguniform(
                 "lr_decay_factor", np.log(1e-3), np.log(0.5)
             ),  # Factor to decay the learning rate
-            "batch_norm": hp.choice("batch_norm", [True, False]),
         }
     else:
         raise ValueError(f"Unknown model architecture: {model_architecture}")
@@ -250,7 +249,7 @@ def do_hyperparameter_search(
     experiment_args: dict, search_space: dict
 ) -> tune.ResultGrid:
 
-    metric_to_optimize = "valid_pearson_r"
+    metric_to_optimize = "valid-pearson-logits-r"
     metric_mode = "max"
 
     # https://docs.ray.io/en/latest/tune/api/schedulers.html#asha-tune-schedulers-ashascheduler
@@ -284,9 +283,7 @@ def do_hyperparameter_search(
     run_config = tune.RunConfig(
         name=experiment_args["experiment_name"],
         storage_path=experiment_args["result_dir"],
-        failure_config=ray.train.FailureConfig(
-            max_failures=3,
-        ),
+        # failure_config=ray.train.FailureConfig(),
         checkpoint_config=ray.train.CheckpointConfig(
             num_to_keep=experiment_args["checkpoints_to_keep"],
             checkpoint_score_attribute=metric_to_optimize,
@@ -297,10 +294,10 @@ def do_hyperparameter_search(
     )
 
     experiment_with_resources = tune.with_resources(
-        trainable=experiment.Experiment,
+        trainable=Experiment,
         resources={
             "cpu": experiment_args["num_cpus_per_trial"],
-            "gpu": experiment_args["num_gpus_per_trial"],
+            "gpu": experiment_args["num_gpus_per_trial"] if torch.cuda.is_available() else 0,
         },
     )
 
@@ -335,7 +332,7 @@ def main() -> None:
 
     ray.init(
         num_cpus=args.num_cpus,
-        object_store_memory=10 * 1024 * 1024 * 1024,
+        object_store_memory=args.object_store_memory_bytes,
         include_dashboard=False,
     )
 

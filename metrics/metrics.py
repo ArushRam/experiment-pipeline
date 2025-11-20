@@ -47,9 +47,9 @@ class Metrics:
 # Populate registry after defining staticmethods
 Metrics._registry = {
     "mse": Metrics.mse,
-    "mse_logits": Metrics.mse_logits,
-    "pearson_r": Metrics.pearson_r,
-    "pearson_r_pval": Metrics.pearson_r_pval,
-    "pearson_logits_r": Metrics.pearson_logits_r,
-    "pearson_logits_r_pval": Metrics.pearson_logits_r_pval,
+    "mse-logits": Metrics.mse_logits,
+    "pearson-r": Metrics.pearson_r,
+    "pearson-r-pval": Metrics.pearson_r_pval,
+    "pearson-logits-r": Metrics.pearson_logits_r,
+    "pearson-logits-r-pval": Metrics.pearson_logits_r_pval,
 }

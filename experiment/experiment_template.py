@@ -5,7 +5,6 @@ import os
 import pandas as pd
 import random
 from ray import tune
-from ray.train.torch import get_device
 import torch
 from torch.profiler import profile, record_function, ProfilerActivity
 from typing import Tuple
@@ -89,7 +88,7 @@ class Experiment(tune.Trainable):
 
         print("Loading model")
         self.model, self.config = self.parse_config(config)
-        self.device = get_device()
+        self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
         if not skip_dataset:
             print("Loading datasets")
@@ -155,9 +154,9 @@ class Experiment(tune.Trainable):
         else:
             self.enable_profiling = False
 
-        if not skip_compiling:
-            print("Compiling model")
-            self.model = torch.compile(self.model, mode="default")
+        # if not skip_compiling:
+        #     print("Compiling model")
+        #     self.model = torch.compile(self.model, mode="default")
 
     def reset_config(self, new_config: dict):
         """
@@ -238,9 +237,7 @@ class Experiment(tune.Trainable):
 
         with profiler_context:
             for i, batch in enumerate(loader):
-                if self.config["data_type"] == "pnas":
-                    seq, struct, target = batch
-                elif self.config["data_type"] == "sequence":
+                if self.config["data_type"] == "sequence":
                     seq, target = batch
                     struct = torch.zeros(0)
                 else:
