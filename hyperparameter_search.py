@@ -219,17 +219,25 @@ def get_dataset_parameters(data_type: str) -> dict:
         raise ValueError(f"Unknown data type: {data_type}")
 
     return dataset_params
-
-
+    
 def get_search_space(model_architecture: str) -> dict:
     if model_architecture == "simple_cnn":
         search_space = {
+            "in_channels": 4,
+            "num_conv_layers": 1,
             "num_filters": hp.choice("conv.num_filters", [16, 32, 64]),
             "kernel_size": hp.choice("conv.kernel_size", [5, 7, 9, 11]),
-            "activation": "gelu",
+            "conv_activation": "gelu",
+            "mlp_activation": "gelu",
+            "batch_norm": True,
+            "weight_penalty_l1": 0,
+            "weight_penalty_l2": hp.loguniform("weight_penalty_l2", np.log(1e-6), np.log(1e-2)),
+            "activity_penalty_l1": hp.loguniform("activity_penalty_l1", np.log(1e-6), np.log(1e-2)),
+            "activity_penalty_l2": hp.loguniform("activity_penalty_l2", np.log(1e-6), np.log(1e-2)),
+            "dropout": 0.2,
             "output_activation": "sigmoid",
             "batch_size_iter": 1024,  # Don't need gradient accumulation, so just set to highest possible batch size
-            "batch_size": hp.qloguniform("batch_size", np.log(128), np.log(1024), 1),
+            "batch_size": hp.loguniform("batch_size", np.log(128), np.log(1024)),
             "init_lr": hp.loguniform(
                 "init_lr", np.log(1e-6), np.log(1e-2)
             ),  # Initial learning rate
