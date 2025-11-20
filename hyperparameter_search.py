@@ -93,10 +93,10 @@ def initialize_argparse() -> argparse.ArgumentParser:
         help="Name of prediction target column.",
     )
     data_args.add_argument(
-        "--upstream_sequence", type=str, required=True, help="Upstream sequence."
+        "--upstream_sequence", type=str, required=False, help="Upstream sequence.",
     )
     data_args.add_argument(
-        "--downstream_sequence", type=str, required=True, help="Downstream sequence."
+        "--downstream_sequence", type=str, required=False, help="Downstream sequence.",
     )
 
     resource_args = parser.add_argument_group("resources", "Resource arguments")
